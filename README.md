@@ -12,7 +12,7 @@
 Run this in your cli:
 
 ```bash
-pnpm add -D @graphql-codegen/cli @graphql-types-document-node/core @parcel/watcher dotenv graphql graphql-tag
+pnpm add -D @graphql-codegen/cli @graphql-typed-document-node/core @parcel/watcher dotenv graphql graphql-tag
 ```
 
 ## Configuration
