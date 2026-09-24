@@ -1,36 +1,176 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Prerequisites
 
-## Getting Started
+1. A local Strapi server running.
+2. Has the following extensions installed in VSCode:
 
-First, run the development server:
+- https://marketplace.visualstudio.com/items?itemName=apollographql.vscode-apollo
+- https://marketplace.visualstudio.com/items?itemName=GraphQL.vscode-graphql
+- https://marketplace.visualstudio.com/items?itemName=GraphQL.vscode-graphql-syntax
+
+## Packages
+
+Run this in your cli:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm add -D @graphql-codegen/cli @graphql-types-document-node/core @parcel/watcher dotenv graphql graphql-tag
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Configuration
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+At root, create a file `codegen.ts`. It should have a code similar below:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```ts
+import type { CodegenConfig } from "@graphql-codegen/cli";
 
-## Learn More
+const apiUrl = process.env.STRAPI_API_URL;
 
-To learn more about Next.js, take a look at the following resources:
+if (!apiUrl) {
+  throw new Error(
+    "Missing STRAPI_API_URL environment variable for GraphQL codegen",
+  );
+}
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+const graphqlToken = process.env.STRAPI_API_TOKEN;
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+const config: CodegenConfig = {
+  overwrite: true,
+  schema: {
+    [`${apiUrl}/graphql`]: {
+      headers: graphqlToken
+        ? {
+            Authorization: `Bearer ${graphqlToken}`,
+          }
+        : {},
+    },
+  },
+  documents: ["lib/graphql/**/*.{ts,tsx}", "!lib/graphql/generated/**/*"],
+  generates: {
+    "lib/graphql/generated/": {
+      preset: "client",
+      presetConfig: {
+        gqlTagName: "gql",
+        fragmentMasking: false,
+      },
+    },
+  },
+  ignoreNoDocuments: false,
+};
 
-## Deploy on Vercel
+export default config;
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+#### What the props mean (sort by essence)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. `generates` - This prop has only one child prop, which is the output path for the generated GraphQL types. In this example, when we finally run our type generation, they will be stored in the `lib/graphql/generated/` folder.
+   - `[outputPath].preset` - We need to set this as `client` as we are generating the types inside the frontend repo.
+
+   - `[outputPath].presetConfig.gqlTagName` - We are going to use `graphql-tag` library here, which allows us to prepend `gql` tag before GraphQL queries, fragments, and mutations. We will use that tag as the value for this prop. Also this guides codegen to scan for files mentioned in the `documents` and that GraphQL operations are wrapped in that tag.
+
+   - `[outputPath].presetConfig.fragmentMasking` - Fragment masking is default to true. While this has benefits in terms of consuming the fragments, this add a layer of requirement in our codebase and can be avoided by idempotency in the schema and the components we create, hence we are setting this as `false`.
+
+2. `documents` - This prop is an array of path where codegen will scan for the GraphQL operations. For the first element `"lib/graphql/**/*.{ts,tsx}"`, it will scan for the queries, fragments, and mutations here wrapped with `generates.[outputPath].presetConfig.gqlTagName`. As for the second element, this is for a special case since the generated types are colocated with the written GraphQL operations. The generated files do contain `gql` tags, hence codegen will regenerate types from the `generated/**/*` path which may result to duplicate type definitions and parse errors. To exclude it from scanning, prepend "!" at the path.
+
+3. `overwrite` - This prop is set to `true` so we continue on overwriting the generated type definitions along our GraphQL query, fragment, and mutation updates.
+
+4. `schema` - This prop points to your GraphQL server.
+
+5. `ignoreNoDocuments` - If lib/graphql/\*_/_.{ts,tsx} finds zero gql-tagged operations, codegen throws an error and stops. It must be set to `false`, as this is a safety feature to ensure that the paths in `documents` contains written GraphQL operations. If it were set to `true` insteadm codegen would just quietly finish with no error, even though it generated nothing useful.
+
+## Execution
+
+The most convenient way to run codegen is via package.json script. This is an example:
+
+```bash
+"graphql:watch": "graphql-codegen --require dotenv/config --config codegen.ts --watch"
+```
+
+With `@parcel/watcher` installed, `--watch` must be appended in the script, and in this way, codegen continues running while we are writing our GraphQL queries (and even if not).
+
+Execute codegen via:
+
+```bash
+pnpm graphql:watch
+```
+
+## Writing GraphQL operations
+
+Write all your GraphQL operations in the set path at `documents` prop. Make sure that they are wrapped in `gql` as set in the `generates.[outputPath].presetConfig.gqlTagName`.
+
+For example:
+
+```ts
+import { gql } from "graphql-tag";
+import { SEO_FRAGMENT } from "@/lib/graphql/fragments/globalFragments";
+import * as CONTENT from "@/lib/graphql/fragments/pageContentFragments";
+
+export const PAGE_QUERY = gql`
+  query Page($status: PublicationStatus, $slug: String) {
+    pages(status: $status, filters: { slug: { eqi: $slug } }) {
+      __typename
+      title
+      slug
+      template
+      homeContent {
+        ...HomePageContentFragment
+      }
+      servicesContent {
+        ...ServicesPageContentFragment
+      }
+      industriesContent {
+        ...IndustriesPageContentFragment
+      }
+      storiesContent {
+        ...StoriesPageContentFragment
+      }
+      aboutUsContent {
+        ...AboutUsPageContentFragment
+      }
+      careersContent {
+        ...CareersPageContentFragment
+      }
+      contactUsContent {
+        ...ContactUsPageContentFragment
+      }
+      utilityContent {
+        ...UtilityPageContentFragment
+      }
+      seoFields {
+        ...SEOFragment
+      }
+    }
+  }
+  ${CONTENT.HOME_PAGE_CONTENT}
+  ${CONTENT.SERVICES_PAGE_CONTENT}
+  ${CONTENT.INDUSTRIES_PAGE_CONTENT}
+  ${CONTENT.STORIES_PAGE_CONTENT}
+  ${CONTENT.ABOUT_US_PAGE_CONTENT}
+  ${CONTENT.CAREERS_PAGE_CONTENT}
+  ${CONTENT.CONTACT_US_PAGE_CONTENT}
+  ${CONTENT.UTILITY_PAGE_CONTENT}
+  ${SEO_FRAGMENT}
+`;
+
+export const PAGES_QUERY = gql`
+  query Pages($status: PublicationStatus) {
+    pages(status: $status, pagination: { limit: 100 }) {
+      __typename
+      title
+      slug
+    }
+  }
+`;
+```
+
+## GraphQL Fetch Service
+
+In our Graphql fetcher, we usually pass the query as a string. If we import `PAGE_QUERY` it is typed as `DocumentNode`. To convert it to a string use `print()` from `graphql`. Like this:
+
+```ts
+import { print } from "graphql";
+
+// JSON.stringify({ query: print(PAGE_QUERY)})
+```
+
+-----
+
+## END
