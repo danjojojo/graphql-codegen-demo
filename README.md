@@ -35,7 +35,7 @@ const graphqlToken = process.env.STRAPI_API_TOKEN;
 const config: CodegenConfig = {
   overwrite: true,
   schema: {
-    [`${apiUrl}/graphql`]: {
+    [`${apiUrl}`]: {
       headers: graphqlToken
         ? {
             Authorization: `Bearer ${graphqlToken}`,
@@ -75,6 +75,23 @@ export default config;
 4. `schema` - This prop points to your GraphQL server.
 
 5. `ignoreNoDocuments` - If lib/graphql/\*_/_.{ts,tsx} finds zero gql-tagged operations, codegen throws an error and stops. It must be set to `false`, as this is a safety feature to ensure that the paths in `documents` contains written GraphQL operations. If it were set to `true` insteadm codegen would just quietly finish with no error, even though it generated nothing useful.
+
+## GraphQL extension configuration
+
+Create .graphqlrc.yml file and add this:
+
+```yml
+schema:
+  - http://localhost:1337/graphql
+documents:
+  - lib/graphql/**/*.{ts,tsx}
+  - '!lib/graphql/generated/**/*'
+extensions:
+  endpoints:
+    default:
+      url: http://localhost:1337/graphql
+
+```
 
 ## Execution
 
