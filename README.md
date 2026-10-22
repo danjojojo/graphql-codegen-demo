@@ -59,6 +59,20 @@ const config: CodegenConfig = {
 export default config;
 ```
 
+Also, at root, add a `.graphqlrc.yml` file. Its content must be structured this way:
+
+```yaml
+schema:
+  - http://localhost:1337/graphql
+documents:
+  - lib/graphql/**/*.{ts,tsx}
+  - "!lib/graphql/generated/**/*"
+extensions:
+  endpoints:
+    default:
+      url: http://localhost:1337/graphql
+```
+
 #### What the props mean (sort by essence)
 
 1. `generates` - This prop has only one child prop, which is the output path for the generated GraphQL types. In this example, when we finally run our type generation, they will be stored in the `lib/graphql/generated/` folder.
@@ -85,12 +99,11 @@ schema:
   - http://localhost:1337/graphql
 documents:
   - lib/graphql/**/*.{ts,tsx}
-  - '!lib/graphql/generated/**/*'
+  - "!lib/graphql/generated/**/*"
 extensions:
   endpoints:
     default:
       url: http://localhost:1337/graphql
-
 ```
 
 ## Execution
@@ -188,6 +201,6 @@ import { print } from "graphql";
 // JSON.stringify({ query: print(PAGE_QUERY)})
 ```
 
------
+---
 
 ## END
